@@ -3,7 +3,7 @@
 use lib "./lib";
 use lib "./blib/lib";
 
-BEGIN { $| = 1; print "1..4\n"; }
+BEGIN { $| = 1; print "1..6\n"; }
 
 ######################################################################
 
@@ -46,9 +46,28 @@ print "ok 3\n";
 
 ######################################################################
 
-print "test 4: closing.\n";
+print "test 4: Checking if we have to run this test again.\n";
+
+$again=0;
+if (not exists $cfg{AGAIN}) {
+  $cfg{AGAIN}="yes";
+  $again=1;
+}
+
+print "ok 4\n";
+
+######################################################################
+
+print "test 5: closing.\n";
 
 untie %cfg;
+
+print "ok 5\n";
+
+######################################################################
+
+print "test 6: closing.\n";
+
 
 tie %cfg,'Tie::Cfg', READ => "/etc/passwd";
 $user=$ENV{USER};
@@ -65,6 +84,14 @@ if (not $user) {
 print "/etc/passwd entry for $user\n";
 print $cfg{$user},"\n";
 
-print "ok 4\n";
+print "ok 6\n";
+
+######################################################################
+if ($again) {
+  print "\nPLEASE run this test again (make test for the second time).\n"
+}
+else {
+  print "\nYou're done.\n";
+}
 
 exit;

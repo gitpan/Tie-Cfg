@@ -3,4 +3,6 @@ MANIFEST
 ChangeLog
 Cfg.pm
 test.pl
+Makefile.PL
+
 
