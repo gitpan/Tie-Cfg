@@ -1,0 +1,15 @@
+Tie-Cfg is a module to have simple configuration files
+tied to a hash.
+
+The configuration files have format:
+
+<key>[:=]<value>
+
+Empty lines are allowed, # <comment> is used for comments.
+
+Enjoy,
+
+Hans Oesterholt-Dijkema <hans@oesterholt-dijkema.emailt.nl>
+
+
+
