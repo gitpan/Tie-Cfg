@@ -1,12 +1,13 @@
+
 jan 2003
 --------
 
 Tie-Cfg can now handle .ini files and you can access sections
 just by using the tied hash as follows:
 
-$ini{"$section.$key"}="Set key $key in section $section";
+$ini{"$section}{$key"}="Set key $key in section $section";
 
-print $ini{"$section.$key"},"\n";
+print $ini{"$section}{$key"},"\n";
 
 
 

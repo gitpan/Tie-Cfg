@@ -1,9 +1,11 @@
-#!/usr/bin/perl
+ö#!/usr/bin/perl
 
 use lib "./lib";
 use lib "./blib/lib";
 
-BEGIN { $| = 1; print "1..8\n"; }
+require 5.6.0;
+
+BEGIN { $| = 1; print "1..10\n"; }
 
 ######################################################################
 
@@ -66,34 +68,39 @@ print "ok 5\n";
 
 ######################################################################
 
-print "test 6: closing.\n";
+print "test 6: reading /etc/passwd.\n";
 
-
-tie %cfg,'Tie::Cfg', READ => "/etc/passwd";
-$user=$ENV{USER};
-if (not $user) {
-  $user=$ENV{$USERNAME};
-  if (not $user) {
-    open IN,"< whoami |";
-    $user=<IN>;
-    chop $user;
-    close IN;
+  $user=$ENV{USER};
+  if ($user eq "") {
+    $user=$ENV{USERNAME};
+    if ($user eq "") {
+      print "Trying whoami...\n";
+      open IN,"whoami |";
+      $user=<IN>;
+      close IN;
+      $user=~s/\s+$//;
+    }
   }
-}
 
-print "/etc/passwd entry for $user\n";
-print $cfg{$user},"\n";
+  print "found user $user\n";
 
-untie %cfg;
+  if (not $user) {
+    print "skipping 6\n";
+  }
+  else {
+    tie %cfg,'Tie::Cfg', READ => "/etc/passwd", SEP => ':', COMMENT => '#';
+    print "/etc/passwd entry for $user\n";
+    print $cfg{$user},"\n";
+    untie %cfg;
 
-print "ok 6\n";
-
+    print "ok 6\n";
+  }
 
 ######################################################################
 
 print "test 7: Using ini mode and sections\n";
 
-tie %cfg,'Tie::Cfg', READ => "sect.ini", WRITE => "sect.ini", INIMODE => 1;
+tie %cfg,'Tie::Cfg', READ => "sect.ini", WRITE => "sect.ini";
 
 print "counter section1.par1=",$cfg{"section1.par1"},"\n";
 my $counter=$cfg{"section1"}{"par1"};
@@ -119,29 +126,81 @@ for (0..10) {
 for (0..10) {
 	print "array[$_]=",$cfg{"array"}{"a"}[$_],"\n";
 }
-  
-
 
 print "untie...\n";
 untie %cfg;
 print "untie done.\n";
 
 print "ok 7\n";
+#exit;
 
 ######################################################################
 
 print "test 8: Using ini mode with user separator\n";
 
-tie %cfg, 'Tie::Cfg', READ => "usersect.ini", WRITE => "usersect.ini", INIMODE => 1, SEP => "<>"; #, SPLITSEP => "[<][>]" (for really difficult separators!)
+tie %cfg, 'Tie::Cfg', READ => "usersect.ini", WRITE => "usersect.ini", SEP => ":", COMMENT => "#", REGSEP => "[:]", REGCOMMENT => "[#]";
 
-print "counter section1.par1",$cfg{"section1"}{"par1"},"\n";
-my $counter=$cfg{"section1"}{"par1"};
+print "counter section1.par1",$cfg{"par1"},"\n";
+my $counter=$cfg{"par1"};
 $counter+=1;
-$cfg{"section1"}{"par1"}=$counter;
+$cfg{"par1"}=$counter;
 
 
 untie %cfg;
 print "ok 8\n";
+
+######################################################################
+
+print "test 9: read and write sect.ini\n";
+
+tie %cfg, 'Tie::Cfg', READ => "sect.ini", WRITE => "sect.ini";
+untie %cfg;
+
+
+######################################################################
+
+print "test 10: recursive hashes in Cfg\n";
+
+tie %cfg, 'Tie::Cfg', READ => "sect.ini", WRITE => "sect.ini";
+
+my $counter=$cfg{"counter"};
+$counter+=1;
+
+for my $i (1..10) {
+	print "array[$i]=$i, ";
+}
+print "\n";
+
+for my $i (1..2) {
+	for my $j (1..2) {
+		for my $k (1..2) {
+			for my $l (1..2) {
+				print "section$i.subsec$j.ssubsec$k.par$l=",$cfg{"section$i"}{"subsec$j"}{"ssubsec$k"}{"par$l"},"\n";
+			}
+			print "section$i.subsec$j.par$k=",$cfg{"section$i"}{"subsec$j"}{"par$k"},"\n";
+		}
+	}
+}
+
+for my $i (1..2) {
+	for my $j (1..2) {
+		for my $k (1..2) {
+			for my $l (1..2) {
+				$cfg{"section$i"}{"subsec$j"}{"ssubsec$k"}{"par$l"}=$counter;
+			}
+			$cfg{"section$i"}{"subsec$j"}{"par$k"}=$counter;
+		}
+	}
+}
+
+
+$counter+=1;
+$cfg{"counter"}=$counter;
+
+untie %cfg;
+print "ok 10\n";
+
+
 
 ######################################################################
 

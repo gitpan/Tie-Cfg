@@ -1,3 +1,11 @@
+0.30 -- .ini support is default now. Also recurrent sections are possible:
+		$ini{"key"}{"sub1"}{"sub2"}{"sub3"}{"par"}="value", will be in the configuration file as
+		
+			[key.sub1.sub2.sub3]
+			par=value
+			
+			
+
 0.20 -- .ini support changed, for %ini, $ini{"section.key"} has been changed to $ini{"section"}{"key"}
 
 

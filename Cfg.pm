@@ -1,53 +1,54 @@
-
 package Tie::Cfg;
+
 require 5.6.0;
+
 use strict;
-
 use Fcntl qw(:DEFAULT :flock);
-
 use vars qw($VERSION %cnf);
 
-$VERSION="0.20";
-
-
+$VERSION="0.30";
 
 sub TIEHASH {
   my $class = shift;
-  my $args  = { READ      => undef,
-                WRITE     => undef,
-                MODE      => 0640,
-                LOCK      => undef,
-                INIMODE   => undef,
-                SEP       => undef,
-                SPLITSEP  => undef,
+  my $args  = { READ       => undef,
+                WRITE      => undef,
+                MODE       => 0640,
+                LOCK       => undef,
+                SEP		   => "=",
+                REGSEP     => undef,
+                COMMENT    => ";",
+                REGCOMMENT => undef,
                 @_
               };
   my $file    = $args->{READ};
   my $outfile = $args->{WRITE};
   my $lock    = $args->{LOCK};
   my $mode    = $args->{MODE};
-  my $inimode = $args->{INIMODE};
-  my $separator;
-  my $fsep;
+  my $sep     = $args->{SEP};
+  my $splitsep= $args->{REGSEP};
+  my $comment = $args->{COMMENT};
+  my $regcmnt = $args->{REGCOMMENT};
   
-  $separator=":" if not $inimode;
-  $separator="=" if $inimode;
-  if ($args->{SEP}) { $separator=$args->{SEP}; }
-  
+  if (not $splitsep) { $splitsep=$sep; }
+  if (not $regcmnt)  { $regcmnt=$comment; }
+
   my %cnf = ();
   my $fh;
   my $val;
   my $key;
-
+  my $prekey="";
+  
   $outfile="" if (not $outfile);
 
   my $node = {
-     CNF  => {},
-     FILE => $outfile,
-     MODE => $mode,
-     LOCK => undef,
-     SEPARATOR => $separator,
-     INIMODE => $inimode
+     CNF   => {},
+     FILE  => $outfile,
+     MODE  => $mode,
+     LOCK  => undef,
+     SEP   => $sep,
+     SSEP  => $splitsep,
+     CMNT  => $comment,
+     SCMNT => $regcmnt,
   };
 
   if (-e $file) {
@@ -61,34 +62,32 @@ sub TIEHASH {
         or die "Cannot lock $lck";
     }
 
-    #chmod $mode,$file;  # Don't change the in file
-    
     my $section="";
-    my $fsep="[:=]";
-    $fsep="=" if ($inimode);
-    $fsep=$args->{SEP} if ($args->{SEP});
-    $fsep=$args->{SPLITSEP} if ($args->{SPLITSEP});
     
     open $fh, $file;
+    
     while (<$fh>) {
       next if /^\s*$/;
-      next if /^\s*#/ and not $inimode;
-      next if /^\s*;/ and $inimode;
-      if (/^\s*\[.*\]\s*$/ and $inimode) {
+      next if /^\s*$regcmnt/;
+      
+      if (/^\s*\[.*\]\s*$/) {
 	      $section=$_;
 	      $section=~s/^\s*\[//;
 	      $section=~s/\]\s*$//;
 	      $section=~s/^\s+//;
 	      $section=~s/\s+$//;
-	      #$section.=".";
+	      
+	      $prekey="";
+	      for (split /\./,$section) {
+		      $prekey.="{$_}";
+	      }
+	      
 	      next;
       }
-      ($key,$val) = split /$fsep/,$_,2;
+      
+      ($key,$val) = split /$splitsep/,$_,2;
       $key=~s/^\s+//;$key=~s/\s+$//;
       $val=~s/^\s+//;$val=~s/\s+$//;
-      #if ($inimode and $section) { 
-	      #$key=$section.$key; 
-      #}
       
       if ($key=~/([\[][0-9]+[\]])$/) {
 	      my $index;
@@ -100,27 +99,26 @@ sub TIEHASH {
 	      $index=~s/[\[]//;
 	      $index=~s/[\]]//;
 	      
-#	      print $key, " - ",$index,"\n";
-	      
-	      if ($inimode and $section) {
-		      $node->{CNF}{$section}{$key}[$index]=$val;
-	      }
-	      else {
-	        $node->{CNF}{$key}[$index]=$val;
-          }
+	      eval('$cnf'."$prekey"."{$key}[$index]=".'"'."$val".'"');
       }
       else {
-	    if ($inimode and $section) {
-		  $node->{CNF}{$section}{$key}=$val;
-	    }  
-	    else {
-          $node->{CNF}{$key}=$val;
-        }
+	      eval('$cnf'."$prekey"."{$key}=".'"'."$val".'"');
       }
     }
     close $fh;
+    
+    $node->{CNF}=\%cnf;
   }
   return bless $node, $class;
+}
+
+sub getHash {
+	my $s=shift;
+	my $r;
+	($s,$r)=split /\./,$s,2;
+	my %c;
+	
+	return $c{s}
 }
 
 sub FETCH {
@@ -163,115 +161,15 @@ sub NEXTKEY {
 sub DESTROY {
   my $self = shift;
   my $fh;
-  my $key;
-  my $value;
   
-  my $inimode=$self->{INIMODE};
-  my $sep=$self->{SEPARATOR};
-
   if ($self->{FILE}) {
     open $fh,">",$self->{FILE};
     
-    if ($inimode) {
-	    print $fh ";";
-    }
-    else {
-	    print $fh "#";
-    }
-    print $fh "Tie::Cfg version $VERSION (c) H. Oesterholt-Dijkema, sep=$sep, inimode=$inimode, license perl\n";
+    print $fh $self->{CMNT}," Tie::Cfg version $VERSION (c) H. Oesterholt-Dijkema, license perl\n";
     print $fh "\n";
     
-    # Pass 1, Keys that are no sections
+    __write_self($self->{CNF},$fh,0,$self->{SEP},$self->{CMNT},"");
     
-    while (($key,$value) = each %{$self->{CNF}}) {
-	    if (ref($value) ne "HASH") {
-		    if (ref($value) eq "ARRAY") {
-			    my $idx=0;
-			    for my $element (@{$value}) {
-				    print $fh "$key","[$idx]",$sep,"$element\n";
-				    $idx+=1;
-			    }
-		    }
-		    else {
-			    print $fh "$key",$sep,"$value\n";
-		    }
-	    }
-    }
-    
-    # Pass 2, keys that are sections
-    
-    while (($key,$value) = each %{$self->{CNF}}) {
-	    if (ref($value) eq "HASH") {
-		    #section
-		    
-		    print $fh "[$key]\n";
-		    
-		    my $section=$key;
-		    my $sectionhash=$value;
-		    while(($key,$value)=each %{$sectionhash}) {
-			    if (ref($value) eq "ARRAY") {
-				    my $idx=0;
-				    for my $element (@{$value}) {
-					    print $fh "$key","[$idx]",$sep,"$element\n";
-					    $idx+=1;
-				    }
-			    }
-			    else {
-				    print $fh "$key",$sep,"$value\n";
-			    }
-		    }
-	    }
-    }
-    
-#     my @values;
-#     while (($key,$value) = each %{$self->{CNF}}) {
-# 	    
-# 	    print "key: ",$key," - ",$value,"\n";
-# 	    
-# 	    my ($s,$k)=split /\./,$key,2;
-# 	    if (not $k) {
-# 		    $key=' '.$key;
-# 	    }
-# 	    
-# 	    if (ref($value) eq "ARRAY") {
-# 		    my $idx=0;
-# 		    for my $val (@{$value}) {
-# 			    push @values,$key."[".$idx."]".$sep.$val;
-# 			    $idx+=1;
-# 		    }
-# 	    }
-# 	    else {
-# 		    push @values,$key.$sep.$value;
-# 	    }
-# 	    
-#     }
-#     
-#     @values=sort @values;
-#     my $section="";
-#     
-#     for my $line (@values) {
-# 	    $line=~s/^[ ]//;
-# 	    if ($inimode) {
-# 		    my ($key,$value)=split /$sep/,$line,2;
-# 		    my ($newsection,$key)=split /\./,$key,2;
-# 		    if (not $key) {
-# 			    print $fh "$line\n";
-# 		    }
-# 		    else {
-# 			    if ($newsection ne $section) {
-# 				    print $fh "[$newsection]\n";
-# 				    print $fh $key.$sep.$value,"\n";
-# 				    $section=$newsection;
-# 			    }
-# 			    else {
-# 				    print $fh $key.$sep.$value,"\n";
-# 			    }
-# 		    }
-# 	    }
-# 	    else {
-#   	      print $fh "$line\n";
-#   	    }
-#     }
     close $fh;
     chmod $self->{MODE},$self->{FILE};
     if ($self->{LOCK}) {
@@ -280,11 +178,67 @@ sub DESTROY {
   }
 }
 
+
+sub __write_self {
+	my $cfg     = shift;
+	my $fh      = shift;
+	my $depth   = shift;
+	my $sep	    = shift;
+	my $cmnt    = shift;
+	my $section = shift;
+	
+	my $key;
+	my $value;
+	
+    # Pass 1, Keys that are no sections
+    
+    if ($section) {
+	    print $fh "[$section]\n";
+    }
+    
+    while (($key,$value) = each %{$cfg}) {
+	    if (ref($value) ne "HASH") {
+		    if (ref($value) eq "ARRAY") {
+			    my $idx=0;
+			    for my $element (@{$value}) {
+				    print $fh "$key","[$idx]","$sep","$element\n";
+				    $idx+=1;
+			    }
+		    }
+		    else {
+			    print $fh "$key","$sep","$value\n";
+		    }
+	    }
+    }
+    
+    # Pass 2, keys that are sections
+    
+    while (($key,$value) = each %{$cfg}) {
+		if (ref($value) eq "HASH") {
+		    # OK, It's a section
+		    
+		    if ($depth==0) {
+		        __write_self($value,$fh,$depth+1,$sep,$cmnt,$key);
+	        }
+	        else {
+		        __write_self($value,$fh,$depth+1,$sep,$cmnt,$section.".".$key);
+	        }
+		    
+	    }
+    }
+    
+}
+
 =pod
 
 =head1 NAME
 
-Tie::Cfg - Ties simple configuration files to hashes.
+Tie::Cfg - Ties simple configuration (.ini) files to hashes.
+           Handles arrays and recurrent sections.
+
+=head1 WARNING
+
+This version breaks previous versions as the default mode is '.ini' mode.
 
 =head1 SYNOPSIS
 
@@ -307,7 +261,7 @@ Tie::Cfg - Ties simple configuration files to hashes.
   my $limit="10000k";
 
   tie my %files, 'Tie::Cfg',
-    READ  => "find $dirs -xdev -type f -size +$limit -printf \"%h/%f:%k\\n\" |";
+    READ  => "find $dirs -xdev -type f -size +$limit -printf \"%h/%f:%k\\n\" |", SEP => ':';
 
   if (exists $files{"/etc/passwd"}) {
     print "You've got a /etc/passwd file!\n";
@@ -319,9 +273,20 @@ Tie::Cfg - Ties simple configuration files to hashes.
   
   untie %files;
   
+  ### Sample 3
+  
+  tie my %cfg, 'Tie::Cfg', READ => "config.cfg", WRITE => "config.cfg", SEP => ':', COMMENT => '#';
+  
+  my $counter=$cfg{"counter"};
+  $counter+=1;
+  $cfg{"counter"}=$counter;
+  $cfg{"counter"}+=1;
+  
+  untie %cfg;
+  
   ### Reading and writing an INI file
   
-  tie my %ini, 'Tie::Cfg', READ => "config.ini", WRITE => "config.ini", INIMODE => 1;
+  tie my %ini, 'Tie::Cfg', READ => "config.ini", WRITE => "config.ini";
   
   my $counter=$ini{"section1"|{"counter1"};
   $counter+=1;
@@ -329,16 +294,23 @@ Tie::Cfg - Ties simple configuration files to hashes.
 
   untie %ini;
 
-  ### Reading an INI file with user separator
+  ### INI file with subsections
   
-  tie my %ini, 'Tie::Cfg', READ => "config.ini", INIMODE => 1, SEP => "\t\t", SPLITSEP => "\s+";
+  tie my %ini, 'Tie::Cfg', READ => "config.ini";
   
   my $counter=$ini{"section1"}{"counter1"};
   $counter+=1;
   $ini{"section1"}{"counter1"}=$counter;
+  
+  $ini{"section1"}{"subsection1"}{"parameter"}="value";
+  
+  my @array;
+  for(1..10) { push @array,$_; }
+  $ini{"section1"}{"array"}{"a"}=@array;
 
   untie %ini;
-  
+
+
 =head1 DESCRIPTION
 
 This module reads in a configuration file at 'tie' and writes it at 'untie'.
@@ -376,6 +348,15 @@ will show up in a tied %cfg hash like:
   for (0..2) {
     print $cfg{"array-section"}{"var"}[$_],"\n";
   }
+  
+Hashes of hashes are permitted:
+
+	$cfg{"key"}{"subkey"}{"subsubkey"}{"subsubsubkey"}{"par"}="value";
+	
+will show up in the configuration file as:  
+
+	[key.subkey.subsubkey.subsubsubkey]
+	par=value
 
 
 =head1 PREREQUISITE
