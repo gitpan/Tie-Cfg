@@ -96,28 +96,28 @@ print "test 7: Using ini mode and sections\n";
 tie %cfg,'Tie::Cfg', READ => "sect.ini", WRITE => "sect.ini", INIMODE => 1;
 
 print "counter section1.par1=",$cfg{"section1.par1"},"\n";
-my $counter=$cfg{"section1.par1"};
+my $counter=$cfg{"section1"}{"par1"};
 $counter+=1;
-$cfg{"section.par1"}=$counter;
-$cfg{"section1.par1"}=$counter;
+$cfg{"section"}{"par1"}=$counter;
+$cfg{"section1"}{"par1"}=$counter;
 
-print "section.par1=",$cfg{"section.par1"},"\n";
-print "section1.par1=",$cfg{"section1.par1"},"\n";
+print "section.par1=",$cfg{"section"}{"par1"},"\n";
+print "section1.par1=",$cfg{"section1"}{"par1"},"\n";
 
 $cfg{"somekey"}=rand;
-$cfg{"somesect.somekey"}="jeo";
+$cfg{"somesect"}{"somekey"}="jeo";
 
-for my $v (@{$cfg{"array.a"}}) {
+for my $v (@{$cfg{"array"}{"a"}}) {
 	print "get a ",$v,"\n";
 }
 
 
 for (0..10) {
-  $cfg{"array.a"}[$_]=$cfg{"array.a"}[$_]+$_;
+  $cfg{"array"}{"a"}[$_]=$cfg{"array"}{"a"}[$_]+$_;
 }
 
 for (0..10) {
-	print "array[$_]=",$cfg{"array.a"}[$_],"\n";
+	print "array[$_]=",$cfg{"array"}{"a"}[$_],"\n";
 }
   
 
@@ -134,10 +134,10 @@ print "test 8: Using ini mode with user separator\n";
 
 tie %cfg, 'Tie::Cfg', READ => "usersect.ini", WRITE => "usersect.ini", INIMODE => 1, SEP => "<>"; #, SPLITSEP => "[<][>]" (for really difficult separators!)
 
-print "counter section1.par1",$cfg{"section1.par1"},"\n";
-my $counter=$cfg{"section1.par1"};
+print "counter section1.par1",$cfg{"section1"}{"par1"},"\n";
+my $counter=$cfg{"section1"}{"par1"};
 $counter+=1;
-$cfg{"section1.par1"}=$counter;
+$cfg{"section1"}{"par1"}=$counter;
 
 
 untie %cfg;

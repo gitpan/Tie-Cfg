@@ -1,3 +1,8 @@
+0.20 -- .ini support changed, for %ini, $ini{"section.key"} has been changed to $ini{"section"}{"key"}
+
+
+0.14 -- .ini files with arrays
+
 0.13 -- ChangeLog needed updating.
 
 0.12 -- .ini file support added.

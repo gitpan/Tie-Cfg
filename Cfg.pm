@@ -7,7 +7,9 @@ use Fcntl qw(:DEFAULT :flock);
 
 use vars qw($VERSION %cnf);
 
-$VERSION="0.14";
+$VERSION="0.20";
+
+
 
 sub TIEHASH {
   my $class = shift;
@@ -78,15 +80,15 @@ sub TIEHASH {
 	      $section=~s/\]\s*$//;
 	      $section=~s/^\s+//;
 	      $section=~s/\s+$//;
-	      $section.=".";
+	      #$section.=".";
 	      next;
       }
       ($key,$val) = split /$fsep/,$_,2;
       $key=~s/^\s+//;$key=~s/\s+$//;
       $val=~s/^\s+//;$val=~s/\s+$//;
-      if ($inimode and $section) { 
-	      $key=$section.$key; 
-      }
+      #if ($inimode and $section) { 
+	      #$key=$section.$key; 
+      #}
       
       if ($key=~/([\[][0-9]+[\]])$/) {
 	      my $index;
@@ -98,12 +100,22 @@ sub TIEHASH {
 	      $index=~s/[\[]//;
 	      $index=~s/[\]]//;
 	      
-	      print $key, " - ",$index,"\n";
+#	      print $key, " - ",$index,"\n";
 	      
-	      $node->{CNF}{$key}[$index]=$val;
+	      if ($inimode and $section) {
+		      $node->{CNF}{$section}{$key}[$index]=$val;
+	      }
+	      else {
+	        $node->{CNF}{$key}[$index]=$val;
+          }
       }
       else {
-        $node->{CNF}{$key}=$val;
+	    if ($inimode and $section) {
+		  $node->{CNF}{$section}{$key}=$val;
+	    }  
+	    else {
+          $node->{CNF}{$key}=$val;
+        }
       }
     }
     close $fh;
@@ -166,58 +178,100 @@ sub DESTROY {
     else {
 	    print $fh "#";
     }
-    print $fh "Tie::Cfg version $VERSION (c) H. Oesterholt-Dijkema, sep=$sep, inimode=$inimode\n";
+    print $fh "Tie::Cfg version $VERSION (c) H. Oesterholt-Dijkema, sep=$sep, inimode=$inimode, license perl\n";
     print $fh "\n";
     
-    my @values;
+    # Pass 1, Keys that are no sections
+    
     while (($key,$value) = each %{$self->{CNF}}) {
-	    
-	    print "key: ",$key," - ",$value,"\n";
-	    
-	    my ($s,$k)=split /\./,$key,2;
-	    if (not $k) {
-		    $key=' '.$key;
-	    }
-	    
-	    if (ref($value) eq "ARRAY") {
-		    my $idx=0;
-		    for my $val (@{$value}) {
-			    push @values,$key."[".$idx."]".$sep.$val;
-			    $idx+=1;
-		    }
-	    }
-	    else {
-		    push @values,$key.$sep.$value;
-	    }
-	    
-    }
-    
-    @values=sort @values;
-    my $section="";
-    
-    for my $line (@values) {
-	    $line=~s/^[ ]//;
-	    if ($inimode) {
-		    my ($key,$value)=split /$sep/,$line,2;
-		    my ($newsection,$key)=split /\./,$key,2;
-		    if (not $key) {
-			    print $fh "$line\n";
+	    if (ref($value) ne "HASH") {
+		    if (ref($value) eq "ARRAY") {
+			    my $idx=0;
+			    for my $element (@{$value}) {
+				    print $fh "$key","[$idx]",$sep,"$element\n";
+				    $idx+=1;
+			    }
 		    }
 		    else {
-			    if ($newsection ne $section) {
-				    print $fh "[$newsection]\n";
-				    print $fh $key.$sep.$value,"\n";
-				    $section=$newsection;
+			    print $fh "$key",$sep,"$value\n";
+		    }
+	    }
+    }
+    
+    # Pass 2, keys that are sections
+    
+    while (($key,$value) = each %{$self->{CNF}}) {
+	    if (ref($value) eq "HASH") {
+		    #section
+		    
+		    print $fh "[$key]\n";
+		    
+		    my $section=$key;
+		    my $sectionhash=$value;
+		    while(($key,$value)=each %{$sectionhash}) {
+			    if (ref($value) eq "ARRAY") {
+				    my $idx=0;
+				    for my $element (@{$value}) {
+					    print $fh "$key","[$idx]",$sep,"$element\n";
+					    $idx+=1;
+				    }
 			    }
 			    else {
-				    print $fh $key.$sep.$value,"\n";
+				    print $fh "$key",$sep,"$value\n";
 			    }
 		    }
 	    }
-	    else {
-  	      print $fh "$line\n";
-  	    }
     }
+    
+#     my @values;
+#     while (($key,$value) = each %{$self->{CNF}}) {
+# 	    
+# 	    print "key: ",$key," - ",$value,"\n";
+# 	    
+# 	    my ($s,$k)=split /\./,$key,2;
+# 	    if (not $k) {
+# 		    $key=' '.$key;
+# 	    }
+# 	    
+# 	    if (ref($value) eq "ARRAY") {
+# 		    my $idx=0;
+# 		    for my $val (@{$value}) {
+# 			    push @values,$key."[".$idx."]".$sep.$val;
+# 			    $idx+=1;
+# 		    }
+# 	    }
+# 	    else {
+# 		    push @values,$key.$sep.$value;
+# 	    }
+# 	    
+#     }
+#     
+#     @values=sort @values;
+#     my $section="";
+#     
+#     for my $line (@values) {
+# 	    $line=~s/^[ ]//;
+# 	    if ($inimode) {
+# 		    my ($key,$value)=split /$sep/,$line,2;
+# 		    my ($newsection,$key)=split /\./,$key,2;
+# 		    if (not $key) {
+# 			    print $fh "$line\n";
+# 		    }
+# 		    else {
+# 			    if ($newsection ne $section) {
+# 				    print $fh "[$newsection]\n";
+# 				    print $fh $key.$sep.$value,"\n";
+# 				    $section=$newsection;
+# 			    }
+# 			    else {
+# 				    print $fh $key.$sep.$value,"\n";
+# 			    }
+# 		    }
+# 	    }
+# 	    else {
+#   	      print $fh "$line\n";
+#   	    }
+#     }
     close $fh;
     chmod $self->{MODE},$self->{FILE};
     if ($self->{LOCK}) {
@@ -269,9 +323,9 @@ Tie::Cfg - Ties simple configuration files to hashes.
   
   tie my %ini, 'Tie::Cfg', READ => "config.ini", WRITE => "config.ini", INIMODE => 1;
   
-  my $counter=$ini{"section1.counter1"};
+  my $counter=$ini{"section1"|{"counter1"};
   $counter+=1;
-  $ini{"section1.counter1"}=$counter;
+  $ini{"section1"}{"counter1"}=$counter;
 
   untie %ini;
 
@@ -279,9 +333,9 @@ Tie::Cfg - Ties simple configuration files to hashes.
   
   tie my %ini, 'Tie::Cfg', READ => "config.ini", INIMODE => 1, SEP => "\t\t", SPLITSEP => "\s+";
   
-  my $counter=$ini{"section1.counter1"};
+  my $counter=$ini{"section1"}{"counter1"};
   $counter+=1;
-  $ini{"section1.counter1"}=$counter;
+  $ini{"section1"}{"counter1"}=$counter;
 
   untie %ini;
   
@@ -300,6 +354,15 @@ if a file should be written (i.e. using the WRITE keyword).
 INIMODE lets you choose between Windows alike .ini configuration files and simple 
 key[:=]value entried files.
 
+Sections are addressed using a hash within a hash: For a tied %cfg the assignment:
+
+  $cfg{"section"}{"key"}="value"
+  
+will write in the configuration file:
+
+  [section]
+  key=value
+
 Keys that end on [\[][0-9]+[\]] will be interpreted as arrays and will show up
 in the tied hash as an array element. For example:
 
@@ -311,7 +374,7 @@ in the tied hash as an array element. For example:
 will show up in a tied %cfg hash like:
 
   for (0..2) {
-    print $cfg{array-section.var}[$_],"\n";
+    print $cfg{"array-section"}{"var"}[$_],"\n";
   }
 
 
