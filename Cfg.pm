@@ -7,7 +7,7 @@ use Fcntl qw(:DEFAULT :flock);
 
 use vars qw($VERSION %cnf);
 
-$VERSION="0.12";
+$VERSION="0.13";
 
 sub TIEHASH {
   my $class = shift;
