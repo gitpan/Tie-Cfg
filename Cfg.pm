@@ -7,7 +7,7 @@ use Fcntl qw(:DEFAULT :flock);
 
 use vars qw($VERSION %cnf);
 
-$VERSION="0.13";
+$VERSION="0.14";
 
 sub TIEHASH {
   my $class = shift;
@@ -87,7 +87,24 @@ sub TIEHASH {
       if ($inimode and $section) { 
 	      $key=$section.$key; 
       }
-      $node->{CNF}{$key}=$val;
+      
+      if ($key=~/([\[][0-9]+[\]])$/) {
+	      my $index;
+	      $index=$key;
+	      
+	      $key=~s/([\[][0-9]+[\]])$//;
+	      
+	      $index=substr($index,length($key));
+	      $index=~s/[\[]//;
+	      $index=~s/[\]]//;
+	      
+	      print $key, " - ",$index,"\n";
+	      
+	      $node->{CNF}{$key}[$index]=$val;
+      }
+      else {
+        $node->{CNF}{$key}=$val;
+      }
     }
     close $fh;
   }
@@ -151,21 +168,31 @@ sub DESTROY {
     }
     print $fh "Tie::Cfg version $VERSION (c) H. Oesterholt-Dijkema, sep=$sep, inimode=$inimode\n";
     print $fh "\n";
-      
     
     my @values;
     while (($key,$value) = each %{$self->{CNF}}) {
+	    
+	    print "key: ",$key," - ",$value,"\n";
+	    
 	    my ($s,$k)=split /\./,$key,2;
 	    if (not $k) {
 		    $key=' '.$key;
 	    }
-	    push @values,$key.$sep.$value;
+	    
+	    if (ref($value) eq "ARRAY") {
+		    my $idx=0;
+		    for my $val (@{$value}) {
+			    push @values,$key."[".$idx."]".$sep.$val;
+			    $idx+=1;
+		    }
+	    }
+	    else {
+		    push @values,$key.$sep.$value;
+	    }
+	    
     }
     
     @values=sort @values;
-    #for my $line (@values) {
-	#    print "$line\n";
-    #}
     my $section="";
     
     for my $line (@values) {
@@ -261,13 +288,37 @@ Tie::Cfg - Ties simple configuration files to hashes.
 =head1 DESCRIPTION
 
 This module reads in a configuration file at 'tie' and writes it at 'untie'.
+
 You can use file locking to prevent others from accessing the configuration file,
-but this should only be used if the configuration file is used as a kind of
-a database to hold a few entries that can be concurrently accessed.
+but this should only be used if the configuration file is used as a small data file 
+to hold a few entries that can be concurrently accessed.
 Note! In this case a persistent ".lock" file will be created.
 
 Mode is used to set access permissions; defaults to 0640. It's only set
-if a file can be written (i.e. using the WRITE keyword).
+if a file should be written (i.e. using the WRITE keyword).
+
+INIMODE lets you choose between Windows alike .ini configuration files and simple 
+key[:=]value entried files.
+
+Keys that end on [\[][0-9]+[\]] will be interpreted as arrays and will show up
+in the tied hash as an array element. For example:
+
+  [array-section]
+  var[0]=1
+  var[1]=2
+  var[2]=3
+
+will show up in a tied %cfg hash like:
+
+  for (0..2) {
+    print $cfg{array-section.var}[$_],"\n";
+  }
+
+
+=head1 PREREQUISITE
+
+Perl's Version >= 5.6.0! Please don't test this module with
+anything earlier. 
 
 =head1 AUTHOR
 
@@ -275,7 +326,7 @@ Hans Oesterholt-Dijkema <hans@oesterholt-dijkema.emailt.nl>
 
 =head1 BUGS
 
-Possibly.
+Probably.
 
 =head1 LICENCE
 

@@ -107,6 +107,21 @@ print "section1.par1=",$cfg{"section1.par1"},"\n";
 $cfg{"somekey"}=rand;
 $cfg{"somesect.somekey"}="jeo";
 
+for my $v (@{$cfg{"array.a"}}) {
+	print "get a ",$v,"\n";
+}
+
+
+for (0..10) {
+  $cfg{"array.a"}[$_]=$cfg{"array.a"}[$_]+$_;
+}
+
+for (0..10) {
+	print "array[$_]=",$cfg{"array.a"}[$_],"\n";
+}
+  
+
+
 print "untie...\n";
 untie %cfg;
 print "untie done.\n";
@@ -123,6 +138,7 @@ print "counter section1.par1",$cfg{"section1.par1"},"\n";
 my $counter=$cfg{"section1.par1"};
 $counter+=1;
 $cfg{"section1.par1"}=$counter;
+
 
 untie %cfg;
 print "ok 8\n";
