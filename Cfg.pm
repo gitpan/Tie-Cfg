@@ -7,21 +7,31 @@ use Fcntl qw(:DEFAULT :flock);
 
 use vars qw($VERSION %cnf);
 
-$VERSION="0.11";
+$VERSION="0.12";
 
 sub TIEHASH {
   my $class = shift;
-  my $args  = { READ  => undef,
-                WRITE => undef,
-                MODE  => 0640,
-                LOCK  => undef,
+  my $args  = { READ      => undef,
+                WRITE     => undef,
+                MODE      => 0640,
+                LOCK      => undef,
+                INIMODE   => undef,
+                SEP       => undef,
+                SPLITSEP  => undef,
                 @_
               };
   my $file    = $args->{READ};
   my $outfile = $args->{WRITE};
   my $lock    = $args->{LOCK};
   my $mode    = $args->{MODE};
-
+  my $inimode = $args->{INIMODE};
+  my $separator;
+  my $fsep;
+  
+  $separator=":" if not $inimode;
+  $separator="=" if $inimode;
+  if ($args->{SEP}) { $separator=$args->{SEP}; }
+  
   my %cnf = ();
   my $fh;
   my $val;
@@ -33,7 +43,9 @@ sub TIEHASH {
      CNF  => {},
      FILE => $outfile,
      MODE => $mode,
-     LOCK => undef
+     LOCK => undef,
+     SEPARATOR => $separator,
+     INIMODE => $inimode
   };
 
   if (-e $file) {
@@ -47,15 +59,34 @@ sub TIEHASH {
         or die "Cannot lock $lck";
     }
 
-      #chmod $mode,$file;  # Don't change the in file
-
+    #chmod $mode,$file;  # Don't change the in file
+    
+    my $section="";
+    my $fsep="[:=]";
+    $fsep="=" if ($inimode);
+    $fsep=$args->{SEP} if ($args->{SEP});
+    $fsep=$args->{SPLITSEP} if ($args->{SPLITSEP});
+    
     open $fh, $file;
     while (<$fh>) {
-      next if /^\s*#/;
       next if /^\s*$/;
-      ($key,$val) = split /[:=]/,$_,2;
+      next if /^\s*#/ and not $inimode;
+      next if /^\s*;/ and $inimode;
+      if (/^\s*\[.*\]\s*$/ and $inimode) {
+	      $section=$_;
+	      $section=~s/^\s*\[//;
+	      $section=~s/\]\s*$//;
+	      $section=~s/^\s+//;
+	      $section=~s/\s+$//;
+	      $section.=".";
+	      next;
+      }
+      ($key,$val) = split /$fsep/,$_,2;
       $key=~s/^\s+//;$key=~s/\s+$//;
       $val=~s/^\s+//;$val=~s/\s+$//;
+      if ($inimode and $section) { 
+	      $key=$section.$key; 
+      }
       $node->{CNF}{$key}=$val;
     }
     close $fh;
@@ -105,11 +136,60 @@ sub DESTROY {
   my $fh;
   my $key;
   my $value;
+  
+  my $inimode=$self->{INIMODE};
+  my $sep=$self->{SEPARATOR};
 
   if ($self->{FILE}) {
     open $fh,">",$self->{FILE};
+    
+    if ($inimode) {
+	    print $fh ";";
+    }
+    else {
+	    print $fh "#";
+    }
+    print $fh "Tie::Cfg version $VERSION (c) H. Oesterholt-Dijkema, sep=$sep, inimode=$inimode\n";
+    print $fh "\n";
+      
+    
+    my @values;
     while (($key,$value) = each %{$self->{CNF}}) {
-      print $fh $key,":",$value,"\n";
+	    my ($s,$k)=split /\./,$key,2;
+	    if (not $k) {
+		    $key=' '.$key;
+	    }
+	    push @values,$key.$sep.$value;
+    }
+    
+    @values=sort @values;
+    #for my $line (@values) {
+	#    print "$line\n";
+    #}
+    my $section="";
+    
+    for my $line (@values) {
+	    $line=~s/^[ ]//;
+	    if ($inimode) {
+		    my ($key,$value)=split /$sep/,$line,2;
+		    my ($newsection,$key)=split /\./,$key,2;
+		    if (not $key) {
+			    print $fh "$line\n";
+		    }
+		    else {
+			    if ($newsection ne $section) {
+				    print $fh "[$newsection]\n";
+				    print $fh $key.$sep.$value,"\n";
+				    $section=$newsection;
+			    }
+			    else {
+				    print $fh $key.$sep.$value,"\n";
+			    }
+		    }
+	    }
+	    else {
+  	      print $fh "$line\n";
+  	    }
     }
     close $fh;
     chmod $self->{MODE},$self->{FILE};
@@ -128,6 +208,8 @@ Tie::Cfg - Ties simple configuration files to hashes.
 =head1 SYNOPSIS
 
   use Tie::Cfg;
+  
+  ### Sample 1
 
   tie my %conf, 'Tie::Cfg',
     READ   => "/etc/connect.cfg",
@@ -138,13 +220,13 @@ Tie::Cfg - Ties simple configuration files to hashes.
   $conf{test}="this is a test";
 
   untie %conf;
+  
+  ### Sample 2
 
   my $limit="10000k";
 
   tie my %files, 'Tie::Cfg',
     READ  => "find $dirs -xdev -type f -size +$limit -printf \"%h/%f:%k\\n\" |";
-
-  $conf{test}="this is a test";
 
   if (exists $files{"/etc/passwd"}) {
     print "You've got a /etc/passwd file!\n";
@@ -153,16 +235,36 @@ Tie::Cfg - Ties simple configuration files to hashes.
   while (($file,$size) = each %newdb) {
     print "Wow! Another file bigger than $limit ($size)\n";
   }
-
-
+  
   untie %files;
+  
+  ### Reading and writing an INI file
+  
+  tie my %ini, 'Tie::Cfg', READ => "config.ini", WRITE => "config.ini", INIMODE => 1;
+  
+  my $counter=$ini{"section1.counter1"};
+  $counter+=1;
+  $ini{"section1.counter1"}=$counter;
 
+  untie %ini;
+
+  ### Reading an INI file with user separator
+  
+  tie my %ini, 'Tie::Cfg', READ => "config.ini", INIMODE => 1, SEP => "\t\t", SPLITSEP => "\s+";
+  
+  my $counter=$ini{"section1.counter1"};
+  $counter+=1;
+  $ini{"section1.counter1"}=$counter;
+
+  untie %ini;
+  
 =head1 DESCRIPTION
 
 This module reads in a configuration file at 'tie' and writes it at 'untie'.
 You can use file locking to prevent others from accessing the configuration file,
 but this should only be used if the configuration file is used as a kind of
 a database to hold a few entries that can be concurrently accessed.
+Note! In this case a persistent ".lock" file will be created.
 
 Mode is used to set access permissions; defaults to 0640. It's only set
 if a file can be written (i.e. using the WRITE keyword).

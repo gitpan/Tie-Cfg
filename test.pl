@@ -3,7 +3,7 @@
 use lib "./lib";
 use lib "./blib/lib";
 
-BEGIN { $| = 1; print "1..6\n"; }
+BEGIN { $| = 1; print "1..8\n"; }
 
 ######################################################################
 
@@ -84,9 +84,51 @@ if (not $user) {
 print "/etc/passwd entry for $user\n";
 print $cfg{$user},"\n";
 
+untie %cfg;
+
 print "ok 6\n";
 
+
 ######################################################################
+
+print "test 7: Using ini mode and sections\n";
+
+tie %cfg,'Tie::Cfg', READ => "sect.ini", WRITE => "sect.ini", INIMODE => 1;
+
+print "counter section1.par1=",$cfg{"section1.par1"},"\n";
+my $counter=$cfg{"section1.par1"};
+$counter+=1;
+$cfg{"section.par1"}=$counter;
+$cfg{"section1.par1"}=$counter;
+
+print "section.par1=",$cfg{"section.par1"},"\n";
+print "section1.par1=",$cfg{"section1.par1"},"\n";
+
+$cfg{"somekey"}=rand;
+$cfg{"somesect.somekey"}="jeo";
+
+print "untie...\n";
+untie %cfg;
+print "untie done.\n";
+
+print "ok 7\n";
+
+######################################################################
+
+print "test 8: Using ini mode with user separator\n";
+
+tie %cfg, 'Tie::Cfg', READ => "usersect.ini", WRITE => "usersect.ini", INIMODE => 1, SEP => "<>"; #, SPLITSEP => "[<][>]" (for really difficult separators!)
+
+print "counter section1.par1",$cfg{"section1.par1"},"\n";
+my $counter=$cfg{"section1.par1"};
+$counter+=1;
+$cfg{"section1.par1"}=$counter;
+
+untie %cfg;
+print "ok 8\n";
+
+######################################################################
+
 if ($again) {
   print "\nPLEASE run this test again (make test for the second time).\n"
 }
