@@ -4,7 +4,7 @@ use strict;
 use LockFile::Simple;
 use vars qw($VERSION %cnf);
 
-$VERSION="0.31";
+$VERSION="0.32";
 
 sub TIEHASH {
   my $class = shift;
@@ -16,6 +16,7 @@ sub TIEHASH {
                 REGSEP     => undef,
                 COMMENT    => ";",
                 REGCOMMENT => undef,
+		CHANGE     => undef,
                 @_
               };
   my $file    = $args->{READ};
@@ -82,6 +83,10 @@ sub TIEHASH {
       ($key,$val) = split /$splitsep/,$_,2;
       $key=~s/^\s+//;$key=~s/\s+$//;
       $val=~s/^\s+//;$val=~s/\s+$//;
+
+      for my $chg (@{$args->{CHANGE}}) {
+        $val=__change($chg,$val);
+      }
       
       if ($key=~/([\[][0-9]+[\]])$/) {
 	      my $index;
@@ -104,7 +109,10 @@ sub TIEHASH {
     $node->{CNF}=\%cnf;
   }
 
-  return bless $node, $class;
+  my $this=bless $node, $class;
+
+
+return $this;
 }
 
 sub getHash {
@@ -115,6 +123,38 @@ sub getHash {
 	
 	return $c{s}
 }
+
+sub __change {
+  my $change=shift;
+  my $value=shift;
+  my $from;
+  my $to;
+  my $g;
+
+  if (not $to) {
+    if ($change=~/g$/) {
+      $g="g";
+    }
+    $change=~s/^s//;
+    $change=~s/^\///;
+    $change=~s/g$//;
+    $change=~s/\/$//;
+    ($from,$to)=split /\//,$change,2;
+  }
+
+  if (not defined $g) { $g=""; }
+
+  if ($g eq "g") {
+    $value=~s/$from/$to/g;
+  }
+  else {
+    $value=~s/$from/$to/;
+  }
+
+
+$value;
+}
+
 
 sub FETCH {
   my $self = shift;
@@ -305,6 +345,15 @@ This version breaks previous versions as the default mode is '.ini' mode.
   $ini{"section1"}{"array"}{"a"}=@array;
 
   untie %ini;
+
+  ### CHANGE option
+
+  tie my %paths, 'Tie::Cfg', READ => "paths.ini", 
+                             CHANGE => [ "s/PREFIX/$myprefix/", "s/CONF/$myconfidir/" ];
+
+  # Do something here
+  
+  untie %paths;
 
 
 =head1 DESCRIPTION

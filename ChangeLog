@@ -1,3 +1,5 @@
+0.32 -- Added 'CHANGE' attribute to TIE method of Tie::Cfg.
+
 0.31 -- test.pl: Sorry! A strange character came in front of #!
 	locking mechanism inherited from LockFile::Simple
 

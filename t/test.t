@@ -9,7 +9,7 @@ use Time::localtime;
 
 BEGIN { 
   $| = 1; 
-  print "1..22\n"; 
+  print "1..23\n"; 
   unlink("conf.cfg.lock");
 }
 
@@ -175,7 +175,18 @@ $counter=$cfg{"par1"};
 $counter+=1;
 $cfg{"par1"}=$counter;
 
+$cfg{"tochange"}="/thisisaprefix/tmp";
 
+#$cfg{"tochange"}="PREFIX/tmp";
+#{
+#my $obj=tied %cfg;
+#my $prefix="\/thisisaprefix";
+#
+#  print "prefix before change: ",$cfg{"tochange"},"\n";
+#  $obj->change("/PREFIX/$prefix/");
+#  print "prefix after change : ",$cfg{"tochange"},"\n";
+#}
+#
 untie %cfg;
 ok(8,$again);
 
@@ -282,6 +293,18 @@ else {
 # Einde while
 
 }
+
+######################################################################
+
+print "test 23: Change 'thisisa'  to THISISARTFMTHING\n";
+
+tie %cfg, 'Tie::Cfg', READ => "usersect.ini", WRITE => "usersect.ini", SEP => ":", COMMENT => "#", REGSEP => "[:]", REGCOMMENT => "[#]", CHANGE => [ "s/thisisa/THISISARTFMTHING/" ];
+
+print $cfg{"tochange"},"\n";
+
+untie %cfg;
+
+ok(23,0);
 
 ######################################################################
 
