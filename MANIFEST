@@ -2,7 +2,7 @@ README
 MANIFEST
 ChangeLog
 Cfg.pm
-test.pl
+t/test.t
 Makefile.PL
 
 

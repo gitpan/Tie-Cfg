@@ -1,11 +1,36 @@
-ö#!/usr/bin/perl
+#!/usr/bin/perl
+
+use strict;
 
 use lib "./lib";
 use lib "./blib/lib";
 
-require 5.6.0;
+use Time::localtime;
 
-BEGIN { $| = 1; print "1..10\n"; }
+BEGIN { 
+  $| = 1; 
+  print "1..22\n"; 
+  unlink("conf.cfg.lock");
+}
+
+sub ok {
+  my $t=shift;
+  my $a=shift;
+  print "ok ",$t+$a,"\n";
+}
+
+sub nok {
+  print "not ";ok(@_);
+}
+
+######################################################################
+
+my %cfg;
+my $again=0;
+my $counter;
+my $tests=11;
+
+while ($again==0 or $again==$tests) {
 
 ######################################################################
 
@@ -14,7 +39,7 @@ print "test 1: using the module and tie this.\n";
 use Tie::Cfg;
 tie %cfg, 'Tie::Cfg', READ => "conf.cfg", WRITE => "conf.cfg", LOCK => 1, MODE => 0600;
 
-print "ok 1\n";
+ok(1,$again);
 
 ######################################################################
 
@@ -29,7 +54,7 @@ for (1..10) {
   }
 }
 print "\n";
-print "ok 2\n";
+ok(2,$again);
 
 ######################################################################
 
@@ -44,35 +69,41 @@ for (1..10) {
 }
 print "\n";
 
-print "ok 3\n";
+ok(3,$again);
 
 ######################################################################
 
 print "test 4: Checking if we have to run this test again.\n";
 
-$again=0;
 if (not exists $cfg{AGAIN}) {
   $cfg{AGAIN}="yes";
-  $again=1;
 }
 
-print "ok 4\n";
+ok(4,$again);
 
 ######################################################################
+
 
 print "test 5: closing.\n";
 
 untie %cfg;
 
-print "ok 5\n";
+ok(5,$again);
+
 
 ######################################################################
 
 print "test 6: reading /etc/passwd.\n";
 
+my $user="";
+my $empty="";
+
   $user=$ENV{USER};
-  if ($user eq "") {
+  if (not $user) { $user=""; }
+
+  if ($user eq $empty) {
     $user=$ENV{USERNAME};
+    if (not $user) { $user=""; }
     if ($user eq "") {
       print "Trying whoami...\n";
       open IN,"whoami |";
@@ -93,7 +124,7 @@ print "test 6: reading /etc/passwd.\n";
     print $cfg{$user},"\n";
     untie %cfg;
 
-    print "ok 6\n";
+    ok(6,$again);
   }
 
 ######################################################################
@@ -102,8 +133,8 @@ print "test 7: Using ini mode and sections\n";
 
 tie %cfg,'Tie::Cfg', READ => "sect.ini", WRITE => "sect.ini";
 
-print "counter section1.par1=",$cfg{"section1.par1"},"\n";
-my $counter=$cfg{"section1"}{"par1"};
+print "counter section1.par1=",$cfg{"section1"}{"par1"},"\n";
+$counter=$cfg{"section1"}{"par1"};
 $counter+=1;
 $cfg{"section"}{"par1"}=$counter;
 $cfg{"section1"}{"par1"}=$counter;
@@ -131,8 +162,7 @@ print "untie...\n";
 untie %cfg;
 print "untie done.\n";
 
-print "ok 7\n";
-#exit;
+ok(7,$again);
 
 ######################################################################
 
@@ -141,13 +171,13 @@ print "test 8: Using ini mode with user separator\n";
 tie %cfg, 'Tie::Cfg', READ => "usersect.ini", WRITE => "usersect.ini", SEP => ":", COMMENT => "#", REGSEP => "[:]", REGCOMMENT => "[#]";
 
 print "counter section1.par1",$cfg{"par1"},"\n";
-my $counter=$cfg{"par1"};
+$counter=$cfg{"par1"};
 $counter+=1;
 $cfg{"par1"}=$counter;
 
 
 untie %cfg;
-print "ok 8\n";
+ok(8,$again);
 
 ######################################################################
 
@@ -156,6 +186,8 @@ print "test 9: read and write sect.ini\n";
 tie %cfg, 'Tie::Cfg', READ => "sect.ini", WRITE => "sect.ini";
 untie %cfg;
 
+ok(9,$again);
+
 
 ######################################################################
 
@@ -163,7 +195,7 @@ print "test 10: recursive hashes in Cfg\n";
 
 tie %cfg, 'Tie::Cfg', READ => "sect.ini", WRITE => "sect.ini";
 
-my $counter=$cfg{"counter"};
+$counter=$cfg{"counter"};
 $counter+=1;
 
 for my $i (1..10) {
@@ -198,17 +230,64 @@ $counter+=1;
 $cfg{"counter"}=$counter;
 
 untie %cfg;
-print "ok 10\n";
-
-
+ok(10,$again);
 
 ######################################################################
 
-if ($again) {
-  print "\nPLEASE run this test again (make test for the second time).\n"
+print "test 11, testing locking\n";
+
+#
+# Never make a tied cfg file before using fork. The child will inherit
+# the cfg and will free it double.
+#
+
+if (not fork()) {
+  print "Child: waiting 2 seconds before start...\n";
+  print "Child: trying to tie...\n";
+  print "Child: ", ctime(),"\n";
+  tie my %cfg, 'Tie::Cfg', READ => "conf.cfg", WRITE => "conf.cfg", LOCK => 1, MODE => 0600;
+  print "Child: Got it at ",ctime(),", untieing...\n";
+  untie %cfg;
+  print "Child: released conf.cfg\n";
+  exit;
+}
+
+tie %cfg, 'Tie::Cfg', READ => "conf.cfg", WRITE => "conf.cfg", LOCK => 1, MODE => 0600;
+print "Parent: Has conf.cfg\n";
+
+print "Parent: sleeping 5 seconds\n";
+sleep 5;
+
+print "Parent: giving free...\n";
+untie %cfg;
+print "Parent: released conf.cfg\n";
+
+print "waiting for child to quit...\n";
+wait;
+
+ok(11,$again);
+
+######################################################################
+
+if (not $again) {
+  print "\nRunning this test again (make test for the second time).\n";
+  $again+=$tests;
 }
 else {
+  $again+=$tests;
   print "\nYou're done.\n";
 }
+
+######################################################################
+# Einde while
+
+}
+
+######################################################################
+
+unlink("conf.cfg");
+unlink("conf.cfg.lock");
+unlink("sect.ini");
+unlink("usersect.ini");
 
 exit;

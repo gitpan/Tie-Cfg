@@ -1,12 +1,10 @@
 package Tie::Cfg;
 
-require 5.6.0;
-
 use strict;
-use Fcntl qw(:DEFAULT :flock);
+use LockFile::Simple;
 use vars qw($VERSION %cnf);
 
-$VERSION="0.30";
+$VERSION="0.31";
 
 sub TIEHASH {
   my $class = shift;
@@ -51,16 +49,12 @@ sub TIEHASH {
      SCMNT => $regcmnt,
   };
 
+  if ($lock and $outfile) {
+      $node->{LOCK}=LockFile::Simple->make(-max => 30, -delay => 1, -nfs => 1);
+      $node->{LOCK}->lock($outfile);
+  }
+
   if (-e $file) {
-    if ($lock and $outfile) {
-      my $lck=$outfile.".lock";
-
-      sysopen $node->{LOCK},$lck, O_RDONLY | O_CREAT
-             or die "Cannot create or open $lck";
-
-      flock($node->{LOCK}, LOCK_EX)
-        or die "Cannot lock $lck";
-    }
 
     my $section="";
     
@@ -109,6 +103,7 @@ sub TIEHASH {
     
     $node->{CNF}=\%cnf;
   }
+
   return bless $node, $class;
 }
 
@@ -172,8 +167,9 @@ sub DESTROY {
     
     close $fh;
     chmod $self->{MODE},$self->{FILE};
+
     if ($self->{LOCK}) {
-      close $self->{LOCK};
+      $self->{LOCK}->unlock($self->{FILE});
     }
   }
 }
